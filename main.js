@@ -141,6 +141,7 @@ function pauseGame() {
 
 	startScreen.querySelector('.blink').innerText = 'スペースキーで再開';
 	startScreen.querySelector('.sub-text').innerText = '';
+	startScreen.querySelector('.title').innerText = '';
 	startScreen.classList.remove('hidden');
 }
 
