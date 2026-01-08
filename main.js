@@ -1,4 +1,6 @@
+// =====================
 // ワードリスト
+// =====================
 const words = [
 	// 英単語
 	"the","of","and","a","to","in","is","you","that","it",
@@ -76,34 +78,50 @@ const words = [
 	"yasai","fruit","jam","salad","aisu","omiyage","kanpai","tanjoubi","shiawase","kibou"
 ];
 
+// =====================
+// 状態変数
+// =====================
 let isPlaying = false;
+let isPaused = false;
+
 let score = 0;
 let life = 3;
 let spawnRate = 2000;
-let duckSpeed = 2;
+let duckSpeed = 1.5;
 let lastSpawnTime = 0;
+let pauseTime = 0;
 let animationFrameId;
 
 let ducks = [];
 let targetDuck = null;
 
+// =====================
+// DOM
+// =====================
 const stage = document.getElementById('stage');
 const scoreDisplay = document.getElementById('score-display');
 const lifeDisplay = document.getElementById('life-display');
 const startScreen = document.getElementById('start-screen');
 const gameOverScreen = document.getElementById('game-over-screen');
 
+// =====================
+// ゲーム開始（最初から）
+// =====================
 function startGame() {
 	isPlaying = true;
+	isPaused = false;
+
 	score = 0;
 	life = 3;
-	duckSpeed = 1.5;
+	duckSpeed = 2;
 	spawnRate = 2000;
 	ducks = [];
 	targetDuck = null;
 	stage.innerHTML = '';
 
 	updateUI();
+
+	startScreen.querySelector('.blink').innerText = 'スペースキーでスタート';
 	startScreen.classList.add('hidden');
 	gameOverScreen.classList.add('hidden');
 
@@ -111,18 +129,52 @@ function startGame() {
 	requestAnimationFrame(gameLoop);
 }
 
+// =====================
+// 一時停止
+// =====================
+function pauseGame() {
+	if (!isPlaying || isPaused) return;
+
+	isPaused = true;
+	pauseTime = performance.now();
+	cancelAnimationFrame(animationFrameId);
+
+	startScreen.querySelector('.blink').innerText = 'スペースキーで再開';
+	startScreen.querySelector('.sub-text').innerText = '';
+	startScreen.classList.remove('hidden');
+}
+
+// =====================
+// 再開
+// =====================
+function resumeGame() {
+	if (!isPlaying || !isPaused) return;
+
+	isPaused = false;
+
+	const now = performance.now();
+	lastSpawnTime += now - pauseTime;
+
+	startScreen.classList.add('hidden');
+	requestAnimationFrame(gameLoop);
+}
+
+// =====================
+// メインループ
+// =====================
 function gameLoop(timestamp) {
-	if (!isPlaying) return;
+	if (!isPlaying || isPaused) return;
 
 	if (timestamp - lastSpawnTime > spawnRate) {
 		spawnDuck();
 		lastSpawnTime = timestamp;
+
 		if (spawnRate > 800) spawnRate -= 10;
 		if (duckSpeed < 4) duckSpeed += 0.01;
 	}
 
 	const width = window.innerWidth;
-	const toRemove = [];
+	const removeIndexes = [];
 
 	ducks.forEach((duck, index) => {
 		duck.x += duckSpeed;
@@ -131,8 +183,9 @@ function gameLoop(timestamp) {
 		if (duck.x > width) {
 			life--;
 			updateUI();
+
 			stage.removeChild(duck.element);
-			toRemove.push(index);
+			removeIndexes.push(index);
 
 			if (targetDuck === duck) targetDuck = null;
 
@@ -142,59 +195,83 @@ function gameLoop(timestamp) {
 		}
 	});
 
-	for (let i = toRemove.length - 1; i >= 0; i--) {
-		ducks.splice(toRemove[i], 1);
+	for (let i = removeIndexes.length - 1; i >= 0; i--) {
+		ducks.splice(removeIndexes[i], 1);
 	}
 
 	animationFrameId = requestAnimationFrame(gameLoop);
 }
 
+// =====================
+// アヒル生成
+// =====================
 function spawnDuck() {
 	const word = words[Math.floor(Math.random() * words.length)];
 	const duckEl = document.createElement('div');
 	duckEl.className = 'duck-container';
 
-	// CSS 描画をやめて画像に置き換える
 	duckEl.innerHTML = `
 		<div class="word-label">${word}</div>
 		<img src="duck.png" alt="duck">
 	`;
 
-	const randomBottom = 10 + Math.random() * 20;
-	duckEl.style.bottom = randomBottom + '%';
-
+	duckEl.style.bottom = (10 + Math.random() * 20) + '%';
 	stage.appendChild(duckEl);
 
 	ducks.push({
 		element: duckEl,
-		word: word,
+		word,
 		remaining: word,
-		typed: "",
+		typed: '',
 		x: -120
 	});
 }
 
+// =====================
+// UI更新
+// =====================
 function updateUI() {
 	scoreDisplay.innerText = `スコア: ${score}`;
-	let lifeStr = "ライフ: ";
-	for (let i = 0; i < life; i++) lifeStr += "❤️";
-	lifeDisplay.innerText = lifeStr;
+	lifeDisplay.innerText = 'ライフ: ' + '❤️'.repeat(life);
 }
 
+// =====================
+// ゲームオーバー
+// =====================
 function gameOver() {
 	isPlaying = false;
+	isPaused = false;
+
 	cancelAnimationFrame(animationFrameId);
 	document.getElementById('final-score').innerText = `スコア: ${score}`;
 	gameOverScreen.classList.remove('hidden');
 }
 
+// =====================
+// 入力処理
+// =====================
 document.addEventListener('keydown', (e) => {
-	if (e.code === 'Space') {
-		if (!isPlaying) startGame();
+
+	if (e.code === 'Escape') {
+		if (isPlaying && !isPaused) {
+			pauseGame();
+		}
 		return;
 	}
 
-	if (!isPlaying) return;
+	if (e.code === 'Space') {
+		if (!isPlaying) {
+			startGame();
+			return;
+		}
+		if (isPlaying && isPaused) {
+			resumeGame();
+			return;
+		}
+		return;
+	}
+
+	if (!isPlaying || isPaused) return;
 
 	if (e.key === 'Shift') {
 		if (targetDuck) {
@@ -210,34 +287,37 @@ document.addEventListener('keydown', (e) => {
 	if (targetDuck) {
 		checkInput(targetDuck, key);
 	} else {
-		const potentialTarget = ducks.find(d => d.remaining.startsWith(key));
-		if (potentialTarget) {
-			targetDuck = potentialTarget;
+		const found = ducks.find(d => d.remaining.startsWith(key));
+		if (found) {
+			targetDuck = found;
 			targetDuck.element.classList.add('target');
 			checkInput(targetDuck, key);
 		}
 	}
 });
 
+// =====================
+// タイピング判定
+// =====================
 function checkInput(duck, key) {
-	if (duck.remaining.startsWith(key)) {
-		duck.typed += key;
-		duck.remaining = duck.remaining.substring(1);
+	if (!duck.remaining.startsWith(key)) return;
 
-		const label = duck.element.querySelector('.word-label');
-		label.innerHTML = `<span class="typed">${duck.typed}</span>${duck.remaining}`;
+	duck.typed += key;
+	duck.remaining = duck.remaining.slice(1);
 
-		if (duck.remaining.length === 0) {
-			score += duck.word.length * 10;
-			updateUI();
+	const label = duck.element.querySelector('.word-label');
+	label.innerHTML = `<span class="typed">${duck.typed}</span>${duck.remaining}`;
 
-			duck.element.classList.add('poof');
-			setTimeout(() => {
-				if (duck.element.parentNode) stage.removeChild(duck.element);
-			}, 300);
+	if (duck.remaining.length === 0) {
+		score += duck.word.length * 10;
+		updateUI();
 
-			ducks = ducks.filter(d => d !== duck);
-			targetDuck = null;
-		}
+		duck.element.classList.add('poof');
+		setTimeout(() => {
+			if (duck.element.parentNode) stage.removeChild(duck.element);
+		}, 300);
+
+		ducks = ducks.filter(d => d !== duck);
+		targetDuck = null;
 	}
 }
